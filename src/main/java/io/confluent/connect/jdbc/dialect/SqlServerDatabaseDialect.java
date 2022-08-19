@@ -35,6 +35,7 @@ import java.util.Calendar;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.TimeZone;
 
 import io.confluent.connect.jdbc.dialect.DatabaseDialectProvider.SubprotocolBasedProvider;
@@ -244,6 +245,7 @@ public class SqlServerDatabaseDialect extends GenericDatabaseDialect {
 
   @Override
   protected String getSqlType(SinkRecordField field) {
+    Map<String, String> parameters = field.schemaParameters();
     if (field.schemaName() != null) {
       switch (field.schemaName()) {
         case Decimal.LOGICAL_NAME:
@@ -274,11 +276,17 @@ public class SqlServerDatabaseDialect extends GenericDatabaseDialect {
       case BOOLEAN:
         return "bit";
       case STRING:
+        String length = parameters != null ? parameters.getOrDefault("length", "") : "";
         if (field.isPrimaryKey()) {
-          // Should be no more than 900 which is the MSSQL constraint
-          return "varchar(900)";
+          if (!length.isEmpty() && Integer.parseInt(length) <= 900) {
+            return "nvarchar(" + length + ")";
+          }
+          return "nvarchar(900)";
+        } else if (!length.isEmpty() && Integer.parseInt(length) <= 4000) {
+          // Should be no more than 4000 which is the MSSQL constraint other than max
+          return "nvarchar(" + length + ")";
         } else {
-          return "varchar(max)";
+          return "nvarchar(max)";
         }
       case BYTES:
         return "varbinary(max)";
